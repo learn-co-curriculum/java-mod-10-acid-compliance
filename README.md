@@ -45,6 +45,7 @@ If we rerun the previous lab's benchmark at this point, we should be able to see
 Let us try interrupting the database operations now to see how that is handled. We'll run a longer benchmark, and while that is running, forcefully terminate the Postgres container
 
 TODO - Previous lab needs to be completely implemented before students run the below correctly
+
 ``` text
 curl "http://localhost:8080/benchmark?count=10000"
 
@@ -54,8 +55,6 @@ docker kill postgres-lab # In a different terminal
 ```
 
 If you start up the container again and view the Postgres logs, you'll be able to see that the system has automatically recovered from where it had crashed.
-
-
 
 ``` text
 docker start postgres-lab
