@@ -131,12 +131,9 @@ but the Postgres application itself is only one component in a full Database imp
 
 ### Isolation
 
-
 Postgres implements Isolation by using different levels of transaction isolation, and data locking. 
 
-
 Let us take a look at a simple example
-
 
 ``` text
 postgres=# \c db_test
@@ -162,7 +159,6 @@ db_test=# SELECT * FROM test;
 What exactly is happening here? While this may look like a single atomic operation, it is actually a multi-step process, with Postgres
 automatically wrapping it in a Transaction. This actually is the default behavior for all SQL operations. Let's slow things down and
 see what is actually going on:
-
 
 ``` text
 db_test=# UPDATE test SET x = x + 1 WHERE id = 1 RETURNING pg_sleep(30);
@@ -214,7 +210,6 @@ db_test=#  select datid, datname, pid, application_name, wait_event_type, wait_e
        |         |  28 |                        | Activity        | CheckpointerMain    |        | 
        |         |  30 |                        | Activity        | WalWriterMain       |        | 
 (18 rows)
-
 ```
 
 You can see here that the first query (pid 173) waits for 30 seconds before completing, the second query (pid 46) waits for completion of the first, and the third captures this state of the second query actively waiting on a Transaction
@@ -226,13 +221,10 @@ data model design quickly becomes a limiting factor.
 
 ### Consistency
 
-
 Consistency of data is supported by all the other guarantees, as well as data local constraints and typing. This is integral to the database in some instances, but also requires a supporting data model
 with proper constraints.
 
 Let's look at some examples
-
-
 
 ``` text
 db_test=# INSERT INTO test (id, x) VALUES (2, 2147483648);
