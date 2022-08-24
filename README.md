@@ -30,27 +30,29 @@ storage, which is recoverable in the case of a system crash or power failure.
 Let's see what these look like:
 
 ``` text
-docker exec -it postgres-lab ls /var/lib/postgresql/data/pg_wal    
+docker exec -it postgres-lab ls /var/lib/postgresql/data/pg_wal
+```
+``` shell
 000000010000000000000004  000000010000000000000005  archive_status
-
+```
+``` text
 docker exec -it postgres-lab pg_waldump -f 000000010000000000000004
+```
+``` shell
 ...
 rmgr: XLOG        len (rec/tot):    114/   114, tx:          0, lsn: 0/0409F040, prev 0/0409F008, desc: CHECKPOINT_ONLINE redo 0/409F008; tli 1; prev tli 1; fpw true; xid 0:122669; oid 33216; multi 1; offset 0; oldest xid 727 in DB 1; oldest multi 1 in DB 1; oldest/newest commit timestamp xid: 0/0; oldest running xid 122669; online
 rmgr: Standby     len (rec/tot):     50/    50, tx:          0, lsn: 0/0409F0B8, prev 0/0409F040, desc: RUNNING_XACTS nextXid 122669 latestCompletedXid 122668 oldestRunningXid 122669
 ```
 
-If we rerun the previous lab's benchmark at this point, we should be able to see this log output streaming in real-time.
-
-
 Let us try interrupting the database operations now to see how that is handled. We'll run a longer benchmark, and while that is running, forcefully terminate the Postgres container
-
-TODO - Previous lab needs to be completely implemented before students run the below correctly
 
 ``` text
 curl "http://localhost:8080/benchmark?count=10000"
-
+```
+``` text
 docker kill postgres-lab # In a different terminal
-
+```
+``` shell
 {"timestamp":"2022-07-13T20:12:19.398+00:00","status":500,"error":"Internal Server Error","path":"/benchmark"}
 ```
 
@@ -59,6 +61,8 @@ If you start up the container again and view the Postgres logs, you'll be able t
 ``` text
 docker start postgres-lab
 docker logs postgres-lab
+```
+``` shell
 ...
 2022-07-13 20:26:08.787 UTC [1] LOG:  starting PostgreSQL 14.4 (Ubuntu 14.4-0ubuntu0.22.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 11.2.0-19ubuntu1) 11.2.0, 64-bit
 2022-07-13 20:26:08.788 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
@@ -74,7 +78,7 @@ docker logs postgres-lab
 
 And let us see just how much of the application client data was lost due to this "crash"
 
-``` text
+``` shell
 # trace server logs from IntelliJ at the point of crash
 ...
 Hibernate: insert into haystack (uuid, value) values (?, ?)
@@ -92,8 +96,9 @@ org.postgresql.util.PSQLException: FATAL: terminating connection due to unexpect
 
 ``` text
 postgres=# \c db_test
-
-db_test=# select * from haystack order by id desc limit 10;
+db_test=# SELECT * FROM haystack ORDER BY id DESC LIMIT 10;
+```
+``` shell
   id   |                 uuid                 | value 
 -------+--------------------------------------+-------
  54815 | b4bfcc8b-223c-4013-90b7-2c0cc5605e40 | hay
@@ -107,8 +112,11 @@ db_test=# select * from haystack order by id desc limit 10;
  54807 | 528fce92-a6b2-48c9-bf21-043419fc9fea | hay
  54806 | 91636e30-d771-4089-a07a-b6e7e833aefa | hay
 (10 rows)
-
-db_test=# select * from haystackuuid order by id desc limit 10;
+```
+``` text
+db_test=# SELECT * FROM haystackuuid ORDER BY id DESC LIMIT 10;
+```
+``` shell
   id   |                 uuid                 
 -------+--------------------------------------
  54814 | a492fa41-ba46-4874-9132-dd0ce0c24390
@@ -138,18 +146,35 @@ Let us take a look at a simple example
 ``` text
 postgres=# \c db_test
 db_test=# CREATE TABLE test(id SERIAL PRIMARY KEY, x INTEGER);
+```
+``` shell
 CREATE TABLE
+```
+``` text
 db_test=# INSERT INTO test (id, x) VALUES (1, 0);
+```
+``` shell
 INSERT 0 1
+```
+``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id | x 
 ----+---
   1 | 0
 (1 row)
-
+```
+``` text
 db_test=# UPDATE test SET x = x + 1 WHERE id = 1;
+```
+``` shell
 UPDATE 1
+```
+``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id | x 
 ----+---
   1 | 1
@@ -162,10 +187,12 @@ see what is actually going on:
 
 ``` text
 db_test=# UPDATE test SET x = x + 1 WHERE id = 1 RETURNING pg_sleep(30);
-
+```
+``` text
 # In another terminal
-
-db_test=# select locktype, database, relation, virtualxid, transactionid, virtualtransaction, pid, mode, granted, fastpath from pg_locks;
+db_test=# SELECT locktype, database, relation, virtualxid, transactionid, virtualtransaction, pid, mode, granted, fastpath FROM pg_locks;
+```
+``` shell
    locktype    | database | relation | virtualxid | transactionid | virtualtransaction | pid |       mode       | granted | fastpath 
 ---------------+----------+----------+------------+---------------+--------------------+-----+------------------+---------+----------
  relation      |    16384 |    41413 |            |               | 15/4               | 173 | RowExclusiveLock | t       | t
@@ -181,14 +208,16 @@ We can see that our slowed process (pid 173 here) actually has several Exclusive
 
 ``` text
 db_test=# UPDATE test SET x = x + 1 WHERE id = 1 RETURNING pg_sleep(30);
-
+```
+``` text
 # In a second terminal
-
 db_test=# UPDATE test SET x = x + 1 WHERE id = 1;
-
+```
+``` text
 # In a third terminal
-
-db_test=#  select datid, datname, pid, application_name, wait_event_type, wait_event, state, query from pg_stat_activity;
+db_test=# SELECT datid, datname, pid, application_name, wait_event_type, wait_event, state, query FROM pg_stat_activity;
+```
+``` shell
  datid | datname | pid |    application_name    | wait_event_type |     wait_event      | state  |                                                          query                                                           
 -------+---------+-----+------------------------+-----------------+---------------------+--------+--------------------------------------------------------------------------------------------------------------------------
        |         |  31 |                        | Activity        | AutoVacuumMain      |        | 
@@ -205,7 +234,7 @@ db_test=#  select datid, datname, pid, application_name, wait_event_type, wait_e
  16384 | db_test | 188 | PostgreSQL JDBC Driver | Client          | ClientRead          | idle   | COMMIT
  16384 | db_test | 190 | PostgreSQL JDBC Driver | Client          | ClientRead          | idle   | COMMIT
  16384 | db_test | 173 | psql                   | Timeout         | PgSleep             | active | UPDATE test SET x = x + 1 WHERE id = 1 RETURNING pg_sleep(30);
- 16384 | db_test | 221 | psql                   |                 |                     | active | select datid, datname, pid, application_name, wait_event_type, wait_event, state, query_id, query from pg_stat_activity;
+ 16384 | db_test | 221 | psql                   |                 |                     | active | SELECT datid, datname, pid, application_name, wait_event_type, wait_event, state, query_id, query FROM pg_stat_activity;
        |         |  29 |                        | Activity        | BgWriterHibernate   |        | 
        |         |  28 |                        | Activity        | CheckpointerMain    |        | 
        |         |  30 |                        | Activity        | WalWriterMain       |        | 
@@ -228,10 +257,20 @@ Let's look at some examples
 
 ``` text
 db_test=# INSERT INTO test (id, x) VALUES (2, 2147483648);
+```
+``` shell
 ERROR:  integer out of range
+```
+``` text
 db_test=# INSERT INTO test (id, x) VALUES (2, 2147483647);
+```
+``` shell
 INSERT 0 1
+```
+``` text
 db_test=# INSERT INTO test (id, x) VALUES (3, 'string');
+```
+``` shell
 ERROR:  invalid input syntax for type integer: "string"
 LINE 1: INSERT INTO test (id, x) VALUES (3, 'string');
 ```
@@ -241,16 +280,34 @@ Let's look at additional constraints that can be used.
 
 ``` text
 db_test=# CREATE TABLE constraint_test(id SERIAL PRIMARY KEY, x INTEGER CHECK ( x > 0 ));
+```
+``` shell
 CREATE TABLE
+```
+``` text
 db_test=# INSERT INTO constraint_test (id, x) VALUES (1, -1);
+```
+``` shell
 ERROR:  new row for relation "constraint_test" violates check constraint "constraint_test_x_check"
 DETAIL:  Failing row contains (1, -1).
+```
+``` text
 db_test=# INSERT INTO constraint_test (id, x) VALUES (1, 1);
+```
+``` shell
 INSERT 0 1
+```
+``` text
 db_test=# UPDATE constraint_test SET x = x - 2 WHERE id = 1;
+```
+``` shell
 ERROR:  new row for relation "constraint_test" violates check constraint "constraint_test_x_check"
 DETAIL:  Failing row contains (1, -1).
+```
+``` text
 db_test=# SELECT * FROM constraint_test;
+```
+``` shell
  id | x 
 ----+---
   1 | 1
@@ -269,21 +326,42 @@ Let's take a look.
        
 ``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id |     x      
 ----+------------
   1 |          4
   2 | 2147483647
 (2 rows)
-
+```
+``` text
 db_test=# BEGIN;
+```
+``` shell
 BEGIN
+```
+``` text
 db_test=*# UPDATE test SET x = x + 1 WHERE id = 1;
+```
+``` shell
 UPDATE 1
+```
+``` text
 db_test=*# UPDATE test SET x = x - 1 WHERE id = 2;
+```
+``` shell
 UPDATE 1
+```
+``` text
 db_test=*# COMMIT;
+```
+``` shell
 COMMIT
+```
+``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id |     x      
 ----+------------
   1 |          5
@@ -297,13 +375,18 @@ Let's see what happens when there is a failure of some kind during a transaction
 
 ``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id |     x      
 ----+------------
   1 |          5
   2 | 2147483646
 (2 rows)
-
+```
+``` text
 db_test=# BEGIN; UPDATE test SET x = x - 2 WHERE id = 1; SELECT * FROM test; UPDATE test SET x = x + 2 WHERE id = 2; COMMIT;
+```
+``` shell
 BEGIN
 UPDATE 1
  id |     x      
@@ -314,7 +397,11 @@ UPDATE 1
 
 ERROR:  integer out of range
 ROLLBACK
+```
+``` text
 db_test=# SELECT * FROM test;
+```
+``` shell
  id |     x      
 ----+------------
   1 |          5
